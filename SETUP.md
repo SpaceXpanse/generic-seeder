@@ -258,9 +258,9 @@ Create `settings.conf` with the following values (or copy from the provided `set
 
 ```ini
 # Protocol & Messaging
-protocol_version="70016"
+protocol_version="120018
 init_proto_version="209"
-min_peer_proto_version="70016"
+min_peer_proto_version="120018
 caddr_time_version=""
 
 # Magic Bytes (from rod-core-wallet chainparams.cpp)
@@ -304,9 +304,9 @@ seed_ip_2=""
 ### ROD Testnet Configuration
 
 ```ini
-protocol_version="70016"
+protocol_version="120018
 init_proto_version="209"
-min_peer_proto_version="70016"
+min_peer_proto_version="120018"
 pchMessageStart_0="0xc8"
 pchMessageStart_1="0xc3"
 pchMessageStart_2="0x95"
