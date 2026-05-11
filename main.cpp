@@ -217,17 +217,23 @@ CAddrDb db;
 
 extern "C" void* ThreadCrawler(void* data) {
   int *nThreads=(int*)data;
+  bool hasLoggedEmptyCrawlerQueue = false;
   do {
     std::vector<CServiceResult> ips;
     int wait = 5;
     db.GetMany(ips, 16, wait);
     int64 now = time(NULL);
     if (ips.empty()) {
+      if (!hasLoggedEmptyCrawlerQueue) {
+        hasLoggedEmptyCrawlerQueue = true;
+        printf("Crawler: no addresses available yet; waiting for seeding/crawl expansion\n");
+      }
       wait *= 1000;
       wait += rand() % (500 * *nThreads);
       Sleep(wait);
       continue;
     }
+    hasLoggedEmptyCrawlerQueue = false;
     vector<CAddress> addr;
     for (int i=0; i<ips.size(); i++) {
       CServiceResult &res = ips[i];
@@ -237,7 +243,7 @@ extern "C" void* ThreadCrawler(void* data) {
       res.strClientV = "";
       res.bInSync = false;
       res.services = 0;
-      bool getaddr = res.ourLastSuccess + 86400 < now;
+      bool getaddr = (res.ourLastSuccess == 0) || (res.ourLastSuccess + 3600 < now);
       res.fGood = TestNode(res.service,res.nBanTime,res.nClientV,res.strClientV,res.nHeight,res.bInSync,getaddr ? &addr : NULL, res.services);
     }
     db.ResultMany(ips);
@@ -325,6 +331,8 @@ public:
 
 extern "C" int GetIPList(void *data, char *requestedHostname, addr_t* addr, int max, int ipv4, int ipv6) {
   CDnsThread *thread = (CDnsThread*)data;
+  static std::atomic<uint64_t> rejectedFlagQueries(0);
+  static std::atomic<uint64_t> rejectedHostQueries(0);
 
   uint64_t requestedFlags = 0;
   int hostlen = strlen(requestedHostname);
@@ -333,11 +341,21 @@ extern "C" int GetIPList(void *data, char *requestedHostname, addr_t* addr, int 
     uint64_t flags = (uint64_t)strtoull(requestedHostname+1, &pEnd, 16);
     if (*pEnd == '.' && pEnd <= requestedHostname+17 && std::find(thread->filterWhitelist.begin(), thread->filterWhitelist.end(), flags) != thread->filterWhitelist.end())
       requestedFlags = flags;
-    else
+    else {
+      uint64_t rejectionCount = ++rejectedFlagQueries;
+      if (rejectionCount <= 20 || (rejectionCount % 100) == 0) {
+        printf("DNS: rejected query '%s' due to unsupported service-flag filter\n", requestedHostname);
+      }
       return 0;
+    }
   }
-  else if (strcasecmp(requestedHostname, thread->dns_opt.host))
+  else if (strcasecmp(requestedHostname, thread->dns_opt.host)) {
+    uint64_t rejectionCount = ++rejectedHostQueries;
+    if (rejectionCount <= 20 || (rejectionCount % 100) == 0) {
+      printf("DNS: rejected query '%s' for non-seed host\n", requestedHostname);
+    }
     return 0;
+  }
   thread->cacheHit(requestedFlags);
   auto& thisflag = thread->perflag[requestedFlags];
   unsigned int size = thisflag.cache.size();
@@ -591,17 +609,44 @@ extern "C" void* ThreadStats(void*) {
 
 string sSeeds[11];
 string *seeds = sSeeds;
+vector<string> fallbackSeeds;
+
+static void AddConfiguredSeedsToDatabase(bool forceAdd, bool logFailures) {
+  for (int i = 0; seeds[i] != ""; i++) {
+    vector<CNetAddr> resolvedAddresses;
+    LookupHost(seeds[i].c_str(), resolvedAddresses);
+    if (resolvedAddresses.empty() && logFailures) {
+      printf("Seeder: failed to resolve seed host '%s'\n", seeds[i].c_str());
+      continue;
+    }
+    for (vector<CNetAddr>::iterator addressIterator = resolvedAddresses.begin(); addressIterator != resolvedAddresses.end(); addressIterator++) {
+      db.Add(CService(*addressIterator, cfg_wallet_port), forceAdd);
+    }
+  }
+
+  for (vector<string>::const_iterator fallbackSeedIterator = fallbackSeeds.begin(); fallbackSeedIterator != fallbackSeeds.end(); fallbackSeedIterator++) {
+    const string& fallbackSeed = *fallbackSeedIterator;
+    CService fallbackService(fallbackSeed, cfg_wallet_port, false);
+    if (!fallbackService.IsValid()) {
+      if (logFailures) {
+        printf("Seeder: invalid fallback seed '%s'\n", fallbackSeed.c_str());
+      }
+      continue;
+    }
+    db.Add(fallbackService, forceAdd);
+  }
+}
 
 extern "C" void* ThreadSeeder(void*) {
+  bool isFirstRun = true;
   do {
-    for (int i=0; seeds[i] != ""; i++) {
-      vector<CNetAddr> ips;
-      LookupHost(seeds[i].c_str(), ips);
-      for (vector<CNetAddr>::iterator it = ips.begin(); it != ips.end(); it++) {
-        db.Add(CService(*it, cfg_wallet_port), true);
-      }
+    AddConfiguredSeedsToDatabase(true, true);
+    if (isFirstRun) {
+      isFirstRun = false;
+      Sleep(10000);
+      continue;
     }
-    Sleep(1800000);
+    Sleep(300000);
   } while(1);
   return nullptr;
 }
@@ -722,6 +767,16 @@ int main(int argc, char **argv) {
 	  }
   }
 
+  for (int i = 1; i <= 10; i++) {
+    try {
+      string configuredFallbackSeed = cfg.lookup("seed_ip_" + std::to_string(i)).c_str();
+      if (!configuredFallbackSeed.empty()) {
+        fallbackSeeds.push_back(configuredFallbackSeed);
+      }
+    } catch(const SettingNotFoundException &nfex) {
+    }
+  }
+
   signal(SIGPIPE, SIG_IGN);
   setbuf(stdout, NULL);
   CDnsSeedOpts opts;
@@ -785,6 +840,18 @@ int main(int argc, char **argv) {
     if (opts.fWipeIgnore)
         db.ResetIgnores();
     printf("done\n");
+  }
+
+  AddConfiguredSeedsToDatabase(true, true);
+  {
+    CAddrDbStats startupStats;
+    db.GetStats(startupStats);
+    printf("Startup DB status: %i good / %i available / %i tracked / %i new / %i banned\n",
+           startupStats.nGood,
+           startupStats.nAvail,
+           startupStats.nTracked,
+           startupStats.nNew,
+           startupStats.nBanned);
   }
   fDumpAll = opts.fDumpAll;
   sForceIP.assign(opts.force_ip, strlen(opts.force_ip));

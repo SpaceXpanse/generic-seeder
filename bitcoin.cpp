@@ -136,7 +136,7 @@ class CNode {
         it++;
         if (addr.nTime <= 100000000 || addr.nTime > now + 600)
           addr.nTime = now - 5 * 86400;
-        if (addr.nTime > now - 604800)
+        if (addr.nTime > now - 2592000)
           vAddr->push_back(addr);
 //        printf("%s: added address %s (#%i)\n", ToString(you).c_str(), addr.ToString().c_str(), (int)(vAddr->size()));
         if (vAddr->size() > 1000) {doneAfter = 1; return true; }
