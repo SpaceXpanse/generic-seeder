@@ -1,3 +1,98 @@
+# Build artifacts
 *.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dll
+*.dylib
 dnsseed*
+Makefile.in
+config.h
+config.log
+config.status
+autom4te.cache/
+aclocal.m4
+compile
+configure
+depcomp
+install-sh
+missing
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Project-specific build/dependency directories
+build/
+dist/
+target/
+bin/
+obj/
+
+# Logs and runtime artifacts
+*.log
 dnsstats.log
+dnsseed.dat
+dnsseed.dump
+dnsseed.dat.new
+*.pid
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Python virtual environment (if used for cf-uploader)
+venv/
+env/
+.venv
+.cf-uploader-env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+*.egg
+
+# Environment and secrets - MUST NOT COMMIT
+.env
+.env.local
+.env.*.local
+secrets.json
+credentials.json
+supersecrets.txt
+.cf-uploader/config.py
+
+# Cloudflare uploader artifacts
+cf-uploader/.env
+cf-uploader/secrets/
+cf-uploader/__pycache__/
+cf-uploader/*.egg-info/
+
+# Test artifacts
+test_*
+*-test*
+coverage/
+.nyc_output
+
+# OS-specific
+ehthumbs.db
+Icon?
+.Spotlight-V100
+.Trashes
+
+*.~*
+.kilocode

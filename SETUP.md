@@ -1,5 +1,7 @@
 # DNS Seeder Setup Guide
 
+**Version 1.1.1** — Includes SpaceXpanse ROD network support
+
 The process of setting up a DNS seeder for use with a blockchain network includes two main components:
 
 1. DNS setup: This can be done using one of two methods: The original [Local DNS Server Setup](#local-dns-server-setup) method or the newer [Cloudflare Setup](#cloudflare-setup) method.
@@ -245,3 +247,100 @@ sudo systemctl stop systemd-resolved
 ![](images/whatismydns-Example.jpg)
 
 - If using Ubuntu and you aren't able to get the local DNS server method to return any "good" IP addresses via nslookup, try restarting the seeder and additionally supplying the `-a <ip address>` argument to force the seeder to bind to a specific IP address. Read more: [Special Instructions for Ubuntu Users](#exclamation-special-instructions-for-ubuntu-users-exclamation)
+
+## Configuring for SpaceXpanse ROD Network
+
+This section provides a quick-start configuration for the SpaceXpanse ROD (ROD) blockchain network. The seeder is fully compatible with ROD mainnet and testnet.
+
+### ROD Mainnet Configuration
+
+Create `settings.conf` with the following values (or copy from the provided `settings.conf.spacexpanse` template):
+
+```ini
+# Protocol & Messaging
+protocol_version="70016"
+init_proto_version="209"
+min_peer_proto_version="70016"
+caddr_time_version=""
+
+# Magic Bytes (from rod-core-wallet chainparams.cpp)
+pchMessageStart_0="0xa2"
+pchMessageStart_1="0xf2"
+pchMessageStart_2="0xf6"
+pchMessageStart_3="0x93"
+
+# Network Parameters
+wallet_port="11998"
+
+# Block Explorer (returns plain number)
+explorer_url="http://explorer1.rod.spacexpanse.org:3001/api/blockcount"
+second_explorer_url=""
+explorer_requery_seconds="60"
+block_count="3671665"  # Update to current block height
+
+# Seed Nodes
+seed_1="seed1.spacexpanse.net"
+seed_2="seed2.spacexpanse.net"
+seed_3=""
+seed_4=""
+seed_5=""
+seed_6=""
+seed_7=""
+seed_8=""
+seed_9=""
+seed_10=""
+
+# Optional direct IP fallbacks (if DNS seeds unreachable)
+seed_ip_1=""
+seed_ip_2=""
+# ... up to seed_ip_10
+```
+
+**Important Notes:**
+- Update `block_count` to the current ROD block height. Query: `curl http://explorer1.rod.spacexpanse.org:3001/api/blockcount`
+- If the explorer API is slow/unreliable, increase `explorer_requery_seconds` (e.g., 300 for 5 minutes)
+- At least one `seed_*` entry must be reachable; if not, use `seed_ip_*` with known working nodes
+
+### ROD Testnet Configuration
+
+```ini
+protocol_version="70016"
+init_proto_version="209"
+min_peer_proto_version="70016"
+pchMessageStart_0="0xc8"
+pchMessageStart_1="0xc3"
+pchMessageStart_2="0x95"
+pchMessageStart_3="0x87"
+wallet_port="18398"
+seed_1="seed1.testnet.spacexpanse.net"
+seed_2="seed2.testnet.spacexpanse.net"
+block_count="0"  # Set appropriately for testnet
+```
+
+### Verifying ROD Configuration
+
+1. After starting the seeder, check that nodes are discovered:
+   ```
+   tail -f dnsseed.dump | grep -E "good.*1"
+   ```
+2. Query DNS (if using local DNS server mode):
+   ```
+   nslookup -t A dnsseed.yourdomain.com
+   ```
+3. If `good` count remains at 0/x, check:
+   - Seed nodes are reachable: `nc -zv seed1.spacexpanse.net 11998`
+   - Magic bytes match exactly (mismatch = handshake failure)
+   - Explorer API returns valid numeric height
+   - Firewall allows outbound TCP:11998 for crawlers
+
+### Troubleshooting Common ROD Issues
+
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| 0 good nodes after 10 min | Wrong magic bytes | Verify pchMessageStart values from chainparams.cpp |
+| Seeds fail to resolve | DNS outage or typo | Check `seed_*` hostnames; use `seed_ip_*` fallback |
+| Nodes marked out-of-sync | Stale `block_count` | Query explorer for current height; update config |
+| Handshake timeout | Firewall blocking | Ensure outbound TCP to port 11998 (mainnet) or 18398 (testnet) |
+| No DNS responses | DNS server not running or port 53 blocked | Check seeder output for "DNS server listening"; open port 53 |
+
+For further assistance, refer to the main [Tips & Troubleshooting](#tips--troubleshooting) section above.

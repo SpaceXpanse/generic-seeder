@@ -1,3 +1,20 @@
+1.1.1 [Hotfix - 2025-06-20]
+-Fix node discovery failure:
+ -Accelerated initial seeding and reduced reseed interval (5 min)
+ -Relaxed address timestamp filter from 7 days to 30 days
+ -Reduced getaddr throttle from 24h to 1h (and always for never-successful nodes)
+ -Added DNS query rejection logging for diagnostics
+ -Added startup DB status logging and crawler empty-queue warning
+ -Added fallback direct-IP seed support (seed_ip_1...seed_ip_10)
+-Add SpaceXpanse ROD network configuration template:
+ -Created settings.conf.spacexpanse with verified mainnet/testnet parameters
+ -Documented ROD mainnet (protocol_version=70016, port=11998, magic bytes a2 f2 f6 93)
+ -Documented ROD testnet (protocol_version=70016, port=18398, magic bytes c8 c3 95 87)
+ -Updated SETUP.md with full ROD configuration examples and troubleshooting
+-Documentation updates:
+ -Updated README to v1.1.1 and listed verified networks including ROD
+ -Enhanced settings.conf.template with seed_ip_* comments and example formats
+
 1.1.0 [January 31, 2021]
 -Add app name + app version to startup msgs
 -Updated readme layout format and verbiage improvements 
